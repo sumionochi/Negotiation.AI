@@ -1,6 +1,6 @@
 'use client';
 import { useSession } from 'next-auth/react';
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import {zodResolver} from "@hookform/resolvers/zod";
@@ -14,13 +14,77 @@ import { useToast } from './ui/use-toast';
 
 import { useRouter } from 'next/navigation';
 import { ToastAction } from './ui/toast';
-import { ArrowBigLeft, ArrowBigRight, ArrowRight } from 'lucide-react';
+import { ArrowRight, Mic, MicOff } from 'lucide-react';
 
 const formSchema = z.object({
     input: z.string().max(1000),
 })
 
+declare global {
+    interface Window {
+      webkitSpeechRecognition: any;
+    }
+  }
+
 const ChatInput = ({chatId}: {chatId: string}) => {
+    // State variables to manage recording status, completion, and transcript
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingComplete, setRecordingComplete] = useState(false);
+    const [transcript, setTranscript] = useState("");
+
+    // Reference to store the SpeechRecognition instance
+    const recognitionRef = useRef<any>(null);
+
+    // Function to start recording
+    const startRecording = () => {
+        setIsRecording(true);
+        // Create a new SpeechRecognition instance and configure it
+        recognitionRef.current = new window.webkitSpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+
+        // Event handler for speech recognition results
+        recognitionRef.current.onresult = (event: any) => {
+        const { transcript } = event.results[event.results.length - 1][0];
+
+        // Log the recognition results and update the transcript state
+        console.log(event.results);
+        setTranscript(transcript);
+        };
+
+        // Start the speech recognition
+        recognitionRef.current.start();
+    };
+
+    // Cleanup effect when the component unmounts
+    useEffect(() => {
+        return () => {
+            // Stop the speech recognition if it's active
+            if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            }
+        };
+    }, []);
+
+    // Function to stop recording
+    const stopRecording = () => {
+        if (recognitionRef.current) {
+            // Stop the speech recognition and mark recording as complete
+            recognitionRef.current.stop();
+            setRecordingComplete(true);
+        }
+    };
+
+    // Toggle recording state and manage recording actions
+    const handleToggleRecording = () => {
+        setIsRecording(!isRecording);
+        if (!isRecording) {
+            startRecording();
+        } else {
+            stopRecording();
+        }
+    };
+
     const subscription = useSubscriptionStore((state)=>state.subscription);
     const {data:session} = useSession();
     const {toast} = useToast();
@@ -28,7 +92,7 @@ const ChatInput = ({chatId}: {chatId: string}) => {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            input: "",
+            input: transcript,
         }
     })
 
@@ -73,7 +137,17 @@ const ChatInput = ({chatId}: {chatId: string}) => {
     return (
         <div className='w-full'>
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className='flex space-x-2 p-2 rounded-t-xl w-full mx-auto bg-white border dark:bg-slate-800'>
+                <form onSubmit={form.handleSubmit(onSubmit)} className='flex items-center gap-4 p-2 rounded-t-xl w-full mx-auto bg-white border dark:bg-slate-800'>
+                    {!isRecording ? (
+                        <Button onClick={handleToggleRecording} className='rounded-full bg-gradient-to-tr text-white from-violet-500 to-orange-300 shadow-md shadow-black flex flex-row gap-2'>
+                            <Mic className='cursor-pointer'/>
+                        </Button>
+                    ):(
+                        <Button onClick={handleToggleRecording} className='bg-gradient-to-tl from-red-200 to-red-600 text-white shadow-md shadow-black flex flex-row gap-2 rounded-full'>
+                            <MicOff className='cursor-pointer'/>
+                        </Button>
+                    )}
+                    
                     <FormField control={form.control} name='input' render={({field})=>(
                         <FormItem className='flex-1'>
                             <FormControl>
