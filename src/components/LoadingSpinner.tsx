@@ -5,7 +5,7 @@ type Props = {}
 
 const LoadingSpinner = (props: Props) => {
   return (
-    <div role='status' className='flex justify-center items-center'>
+    <div role='status' className='flex justify-start items-center'>
         <Loader2 className='w-8 h-8 animate-spin'/>
     </div>
   )
