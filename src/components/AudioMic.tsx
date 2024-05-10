@@ -3,17 +3,26 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
+  TooltipProvider
 } from "@/components/ui/tooltip";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Download, Mic, Trash } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { addDoc, getDocs, serverTimestamp } from "firebase/firestore";
+import { User, limitedMessagesRef, messageRef } from "@/lib/converters/Message";
+import {
+  LanguageSuppport,
+  LanguageSuppportMap,
+  useLanguageStore,
+} from "@/../store/store";
 
 type Props = {
   className?: string;
   timerClassName?: string;
+  chatId: string
 };
 
 type Record = {
@@ -31,21 +40,84 @@ const padWithLeadingZeros = (num: number, length: number): string => {
   return String(num).padStart(length, "0");
 };
 
-// Utility function to download a blob
-const downloadBlob = (blob: Blob) => {
-  const downloadLink = document.createElement("a");
-  downloadLink.href = URL.createObjectURL(blob);
-  downloadLink.download = `Audio_${new Date().getMilliseconds()}.mp3`;
-  document.body.appendChild(downloadLink);
-  downloadLink.click();
-  document.body.removeChild(downloadLink);
+const blobToBase64 = (blob: Blob) => {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        const base64String = reader.result.split(',')[1];
+        resolve(base64String);
+      } else {
+        reject(new Error('Failed to convert Blob to Base64 string'));
+      }
+    };
+    reader.onerror = (error) => reject(error);
+  });
 };
+// Utility function to send a blob
+async function submitRecord(blob: Blob, chatId: string, session: any, language: string) {
+  const audio = blob;
+  console.log(audio);
+  if (!session?.user) {
+    return;
+  }
+
+  const inpBhashini = {
+    bn: "রেকর্ড করা অডিও",
+    en: "Recorded Audio",
+    gu: "રેકોર્ડ કરેલ ઓડિયો",
+    hi: "रिकॉर्ड किया हुआ ऑडियो",
+    kn: "ರೆಕಾರ್ಡ್ ಮಾಡಲಾದ ಧ್ವನಿ",
+    ml: "റേക്കോർഡ് ചെയ്ത ഓഡിയോ",
+    mr: "रेकॉर्ड केलेला ध्वनीमुद्रण",
+    or: "ରେକର୍ଡ୍ କରାଯାଇଥିବା ଅଡିଓ",
+    pa: "ਰਿਕਾਰਡ ਕੀਤੀ ਆਡੀਓ",
+    ta: "பதிவுசெய்யப்பட்ட ஆடியோ",
+    te: "రికార్డ్ చేసిన ఆడియో"
+  };
+
+  try {
+    const base64Audio = await blobToBase64(audio);
+    console.log(base64Audio);
+    const audiBhashini = await fetch('/api/getAllAudioTranslations', {
+      method: 'POST',
+      body: JSON.stringify({ audio_file: base64Audio, sourceLanguage: language })
+    });
+
+    if (audiBhashini.ok) {
+      const data = await audiBhashini.json();
+      console.log(data);
+      const userToStore: User = {
+        id: session.user.id!,
+        name: session.user.name!,
+        email: session.user.email!,
+        image: session.user.image || ""
+      };
+      addDoc(messageRef(chatId), {
+        input: "Recorded Audio...",
+        inputBhashini: inpBhashini,
+        audioBhashini: data.response,
+        timestamp: serverTimestamp(),
+        user: userToStore
+      });
+    } else {
+      console.error('Failed to fetch translations:', audiBhashini.status);
+    }
+  } catch (error) {
+    console.error('Error fetching translations:', error);
+  }
+}
 
 export const AudioRecorderWithVisualizer = ({
   className,
   timerClassName,
+  chatId
 }: Props) => {
   const { theme } = useTheme();
+  const { data: session } = useSession();
+  const sessionSave = session;
+  const [language, setLanguage, getLanguage, getNotSupportedLanguage] = useLanguageStore((state)=>[state.language, state.setLanguage, state.getLanguage, state.getNotSupportedLanguages]);
   // States
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isRecordingFinished, setIsRecordingFinished] =
@@ -136,27 +208,15 @@ export const AudioRecorderWithVisualizer = ({
         });
     }
   }
-  const convertBlobToBase64 = (blob:any) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = () => {
-        const base64data = reader.result;
-        resolve(base64data);
-      };
-      reader.onerror = (error) => reject(error);
-    });
-  };
   function stopRecording() {
-    recorder.onstop = async () => {
+    recorder.onstop = () => {
       const recordBlob = new Blob(recordingChunks, {
         type: "audio/wav",
       });
-      downloadBlob(recordBlob);
-      const base64Audio = await convertBlobToBase64(recordBlob);
+      submitRecord(recordBlob, chatId, session, language);
       setCurrentRecord({
         ...currentRecord,
-        file: base64Audio,
+        file: window.URL.createObjectURL(recordBlob),
       });
       recordingChunks = [];
     };
@@ -210,7 +270,7 @@ export const AudioRecorderWithVisualizer = ({
   }
   const handleSubmit = () => {
     stopRecording();
-  };  
+  };
 
   // Effect to update the timer every second
   useEffect(() => {
@@ -239,7 +299,7 @@ export const AudioRecorderWithVisualizer = ({
       const barWidth = 1;
       const spacing = 1;
       const maxBarHeight = HEIGHT / 2.5;
-      const numBars = Math.floor((WIDTH + 200)/ (barWidth + spacing));
+      const numBars = Math.floor(WIDTH / (barWidth + spacing));
 
       for (let i = 0; i < numBars; i++) {
         const barHeight = Math.pow(dataArray[i] / 128.0, 8) * maxBarHeight;
@@ -290,9 +350,9 @@ export const AudioRecorderWithVisualizer = ({
   return (
     <div
       className={cn(
-        "flex h-16 rounded-md relative w-full items-center justify-end gap-2",
+        "flex h-16 rounded-md relative w-full items-center justify-center gap-2 max-w-5xl",
         {
-          "border-none p-1": isRecording,
+          "border p-1": isRecording,
           "border-none p-0": !isRecording,
         },
         className
@@ -325,9 +385,8 @@ export const AudioRecorderWithVisualizer = ({
                 onClick={resetRecording}
                 size={"icon"}
                 variant={"destructive"}
-                className="bg-gradient-to-r from-rose-500 via-red-400 to-red-500 shadow-md shadow-black"
               >
-                <Trash size={20}  />
+                <Trash size={15} />
               </Button>
             </TooltipTrigger>
             <TooltipContent className="m-2">
@@ -342,12 +401,12 @@ export const AudioRecorderWithVisualizer = ({
         <Tooltip>
           <TooltipTrigger asChild>
             {!isRecording ? (
-              <Button className="bg-gradient-to-bl text-white from-violet-500 to-orange-300 shadow-md shadow-black" onClick={() => startRecording()} size={"icon"}>
-                <Mic size={20} />
+              <Button onClick={() => startRecording()} size={"icon"}>
+                <Mic size={15} />
               </Button>
             ) : (
-              <Button className="bg-gradient-to-r from-violet-300 to-violet-400 shadow-md shadow-black" onClick={handleSubmit} size={"icon"}>
-                <Download size={20} className="text-white"/>
+              <Button onClick={handleSubmit} size={"icon"}>
+                <Download size={15} />
               </Button>
             )}
           </TooltipTrigger>
@@ -385,7 +444,7 @@ const Timer = React.memo(
     return (
       <div
         className={cn(
-          "items-center bg-white dark:bg-black top-4 left-2 absolute justify-center gap-2 border p-1.5 rounded-md font-mono font-medium text-foreground flex",
+          "items-center -top-12 left-0 absolute justify-center gap-0.5 border p-1.5 rounded-md font-mono font-medium text-foreground flex",
           timerClassName
         )}
       >

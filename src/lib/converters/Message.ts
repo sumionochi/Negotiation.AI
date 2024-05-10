@@ -22,12 +22,53 @@ export interface User {
   image: string;
 }
 
+export interface InputBhashini {
+  bn: string,
+  en: string,
+  gu: string,
+  hi: string,
+  kn: string,
+  ml: string,
+  mr: string,
+  or: string,
+  pa: string,
+  ta: string,
+  te: string,
+}
+
+export interface AudioBhashini {
+  bn: string,
+  en: string,
+  gu: string,
+  hi: string,
+  kn: string,
+  ml: string,
+  mr: string,
+  or: string,
+  pa: string,
+  ta: string,
+  te: string,
+}
+
+export interface EmotionScore {
+  label: string,
+  score: number,
+}
+
+export interface EmotionBhashini {
+  [key: string]: EmotionScore[];
+}
+
 export interface Message {
   id?: string;
+
+  inputBhashini:InputBhashini,  
+  audioBhashini?:AudioBhashini,
+  emotionBhashini?:EmotionBhashini,
+
   input: string;
   timestamp: Date;
   user: User;
-  audio?: string;
   translated?: {
     [K in LanguageSuppport]?: string;
   };
@@ -37,7 +78,12 @@ const messageConverter: FirestoreDataConverter<Message> = {
   toFirestore: function (message: Message): DocumentData {
     return {
       input: message.input,
-      audio: message.audio,
+
+      inputBhashini: message.inputBhashini ?? {},
+      audioBhashini: message.audioBhashini ?? {},
+      emotionBhashini: message.emotionBhashini ?? {},
+
+
       timestamp: message.timestamp,
       user: message.user,
     };
@@ -51,10 +97,14 @@ const messageConverter: FirestoreDataConverter<Message> = {
     return {
       id: snapshot.id,
       input: data.input,
+
+      inputBhashini: data.inputBhashini,
+      audioBhashini: data.audioBhashini,
+      emotionBhashini: data.emotionBhashini,
+
       timestamp: data.timestamp?.toDate(),
       translated: data.translated,
       user: data.user,
-      audio: data.audio,
     };
   },
 };

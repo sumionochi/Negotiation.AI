@@ -20,18 +20,17 @@ function ChatListRow({chatId}:{chatId:string}){
       return chatId.substring(0,n);
     }
 
-    const Welcome = ()=> {
-      if(language === 'en') return 'Welcome';
-      else if(language === 'hi') return 'Welcome';
-      else if(language === 'de') return 'Welcome';
-      else if(language === 'fr') return 'Welcome';
-      else if(language === 'ja') return 'Welcome';
-      else if(language === 'ur') return 'Welcome';
-      else if(language === 'ta') return 'Welcome';
-      else if(language === 'mr') return 'Welcome';
-      else if(language === 'ko') return 'Welcome';
-      else if(language === 'gu') return 'Welcome';
-      else if(language === 'bn') return 'Welcome';
+    const Welcome = () => {
+      if (language === 'en') return 'Welcome';
+      else if (language === 'hi') return 'स्वागत है';
+      else if (language === 'bn') return 'স্বাগতম';
+      else if (language === 'gu') return 'આવકાર';
+      else if (language === 'or') return 'ସ୍ୱାଗତ';
+      else if (language === 'ml') return 'സ്വാഗതം';
+      else if (language === 'mr') return 'स्वागत';
+      else if (language === 'pa') return 'ਸੁਆਗਤ';
+      else if (language === 'ta') return 'வரவேற்கிறோம்';
+      else if (language === 'te') return 'స్వాగతం';
       else return 'Welcome';
     }
 
