@@ -4,7 +4,7 @@ import ChatInput from '@/components/ChatInput'
 import ChatMessages from '@/components/ChatMessages'
 import MemberBadge from '@/components/MemberBadge'
 import { getAuthSession } from '@/lib/auth'
-import { chatMembersRef } from '@/lib/converters/ChatMembers'
+import { chatMemberCollectionGroupRef, chatMembersRef } from '@/lib/converters/ChatMembers'
 import { sortedMessagesRef } from '@/lib/converters/Message'
 import { getDocs } from 'firebase/firestore'
 import { redirect } from 'next/navigation'
@@ -18,6 +18,13 @@ type Props = {
 
 const ChatScreen = async ({params: {chatId}}: Props) => {
   const session = await getAuthSession()
+  const chatSnapshot = await getDocs(chatMemberCollectionGroupRef(session?.user.id!))
+  const initialChats = chatSnapshot.docs.map((doc)=>({
+      ...doc.data(),
+      timestamp: null,
+  }))
+  
+  console.log(initialChats)
   const initialMessages = (await getDocs(sortedMessagesRef(chatId))).docs.map((doc)=>doc.data());
   const hasAccess = (await getDocs (chatMembersRef(chatId))).docs
   .map((doc)=>doc.id)
@@ -34,7 +41,7 @@ const ChatScreen = async ({params: {chatId}}: Props) => {
         <ChatMessages chatId={chatId} session={session} initialMessages={initialMessages}/>
       </div>
       <div className='w-full sticky bottom-0 px-4'>
-        <ChatInput chatId={chatId}/>
+        <ChatInput chatId={chatId} initialMessages={initialMessages}/>
       </div>
     </div>
   )

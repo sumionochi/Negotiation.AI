@@ -8,16 +8,24 @@ import {
 } from "@/components/ui/tooltip";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Download, Mic, Trash } from "lucide-react";
+import { ArrowBigRight, ArrowRight, Badge, Download, LucidePhoneOff, Mic, Phone, PhoneOff, Save, Trash } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
-import { addDoc, getDocs, serverTimestamp } from "firebase/firestore";
+import { addDoc, serverTimestamp } from "firebase/firestore";
 import { User, limitedMessagesRef, messageRef } from "@/lib/converters/Message";
 import {
   LanguageSuppport,
   LanguageSuppportMap,
   useLanguageStore,
 } from "@/../store/store";
+import { getDocs, query, orderBy, limit } from "firebase/firestore";
+import MemberBadge from "./MemberBadge";
+import { ChatMembers, chatMembersRef } from "@/lib/converters/ChatMembers";
+import { useCollectionData } from "react-firebase-hooks/firestore";
+import useAdminId from "@/hooks/useAdminId";
+import UserAvatar from "./UserAvatar";
+import LoadingSpinner from "./LoadingSpinner";
+import LangSelect from "./LangSelect";
 
 type Props = {
   className?: string;
@@ -87,7 +95,7 @@ async function submitRecord(blob: Blob, chatId: string, session: any, language: 
 
     if (audiBhashini.ok) {
       const data = await audiBhashini.json();
-      console.log(data);
+
       const userToStore: User = {
         id: session.user.id!,
         name: session.user.name!,
@@ -118,6 +126,8 @@ export const AudioRecorderWithVisualizer = ({
   const { data: session } = useSession();
   const sessionSave = session;
   const [language, setLanguage, getLanguage, getNotSupportedLanguage] = useLanguageStore((state)=>[state.language, state.setLanguage, state.getLanguage, state.getNotSupportedLanguages]);
+  const [showOverlay, setShowOverlay] = useState(false);
+
   // States
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isRecordingFinished, setIsRecordingFinished] =
@@ -163,6 +173,7 @@ export const AudioRecorderWithVisualizer = ({
 
   function startRecording() {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      setShowOverlay(true);
       navigator.mediaDevices
         .getUserMedia({
           audio: true,
@@ -205,6 +216,7 @@ export const AudioRecorderWithVisualizer = ({
         .catch((error) => {
           alert(error);
           console.log(error);
+          setShowOverlay(false);
         });
     }
   }
@@ -229,6 +241,7 @@ export const AudioRecorderWithVisualizer = ({
     clearTimeout(timerTimeout);
   }
   function resetRecording() {
+    setShowOverlay(false);
     const { mediaRecorder, stream, analyser, audioContext } =
       mediaRecorderRef.current;
 
@@ -347,27 +360,53 @@ export const AudioRecorderWithVisualizer = ({
     };
   }, [isRecording, theme]);
 
+  const [members, loading, error] = useCollectionData<ChatMembers>(
+    chatMembersRef(chatId)
+  )
+  const adminId = useAdminId({chatId});
+  if(loading && !members) return <LoadingSpinner/>
+
   return (
-    <div
-      className={cn(
-        "flex h-16 rounded-md relative w-full items-center justify-center gap-2 max-w-5xl",
-        {
-          "border p-1": isRecording,
-          "border-none p-0": !isRecording,
-        },
-        className
+    <>
+      {showOverlay && (
+        <div className="fixed flex flex-col justify-center items-center top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full bg-primary dark:bg-black opacity-100 z-2">
+          {
+            !loading && (
+              <div className="mt-24 sm:mt-0">
+                {members?.map((member)=>(
+                    <div className='p-5 border-2 bg-secondary/20 rounded-xl m-5'>
+                        <div className='flex items-center sm:space-x-2'>
+                          <UserAvatar name={member.email} image={member.image} />
+                      </div>
+                      <div className='max-sm:hidden'>
+                          <p className="text-white">{member.email}</p>
+                          {member.userId === adminId && (
+                              <p className='text-indigo-400 animate-pulse'>Admin</p>
+                          )}
+                      </div>
+                    </div>
+                ))}
+              </div>
+          )
+          }
+
+          {
+            <LangSelect/>
+          }
+          
+        </div>
       )}
-    >
+      <div className={cn("flex h-16 rounded-md relative w-full items-center justify-end gap-2",{"border p-1": isRecording,"border-none p-0": !isRecording,},className)}>
       {isRecording ? (
-        <Timer
-          hourLeft={hourLeft}
-          hourRight={hourRight}
-          minuteLeft={minuteLeft}
-          minuteRight={minuteRight}
-          secondLeft={secondLeft}
-          secondRight={secondRight}
-          timerClassName={timerClassName}
-        />
+          <Timer
+            hourLeft={hourLeft}
+            hourRight={hourRight}
+            minuteLeft={minuteLeft}
+            minuteRight={minuteRight}
+            secondLeft={secondLeft}
+            secondRight={secondRight}
+            timerClassName={timerClassName}
+          />
       ) : null}
       <canvas
         ref={canvasRef}
@@ -376,7 +415,6 @@ export const AudioRecorderWithVisualizer = ({
         }`}
       />
       <div className="flex gap-2">
-        {/* ========== Delete recording button ========== */}
         {isRecording ? (
           <TooltipProvider>
             <Tooltip>
@@ -384,13 +422,13 @@ export const AudioRecorderWithVisualizer = ({
               <Button
                 onClick={resetRecording}
                 size={"icon"}
-                variant={"destructive"}
+                className=" text-white bg-gradient-to-r from-rose-700 to-pink-600 shadow-md shadow-black flex flex-row gap-2"
               >
-                <Trash size={15} />
+                <PhoneOff size={20} />
               </Button>
             </TooltipTrigger>
             <TooltipContent className="m-2">
-              <span> Reset recording</span>
+              <span>End the call</span>
             </TooltipContent>
           </Tooltip>
           </TooltipProvider>
@@ -399,27 +437,28 @@ export const AudioRecorderWithVisualizer = ({
         {/* ========== Start and send recording button ========== */}
         <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
+          <TooltipTrigger className="flex justify-end items-center" asChild>
             {!isRecording ? (
-              <Button onClick={() => startRecording()} size={"icon"}>
-                <Mic size={15} />
+              <Button onClick={() => startRecording()} className="bg-gradient-to-tr text-white from-violet-500 to-orange-300 shadow-md shadow-black flex flex-row gap-2">
+                <Phone size={20} />
               </Button>
             ) : (
-              <Button onClick={handleSubmit} size={"icon"}>
-                <Download size={15} />
+              <Button onClick={handleSubmit} className=" text-white bg-gradient-to-r from-teal-400 to-gray-800 shadow-md shadow-black flex flex-row gap-2">
+                <ArrowRight size={20} />
               </Button>
             )}
           </TooltipTrigger>
           <TooltipContent className="m-2">
             <span>
               {" "}
-              {!isRecording ? "Start recording" : "Download recording"}{" "}
+              {!isRecording ? "Start the call" : "Send recording"}{" "}
             </span>
           </TooltipContent>
         </Tooltip>
         </TooltipProvider>
       </div>
     </div>
+    </>
   );
 };
 
@@ -444,7 +483,7 @@ const Timer = React.memo(
     return (
       <div
         className={cn(
-          "items-center -top-12 left-0 absolute justify-center gap-0.5 border p-1.5 rounded-md font-mono font-medium text-foreground flex",
+          "items-center h-16 p-5 bg-secondary top-0 left-0 absolute justify-center gap-0.5 border rounded-md font-mono font-medium text-foreground flex",
           timerClassName
         )}
       >

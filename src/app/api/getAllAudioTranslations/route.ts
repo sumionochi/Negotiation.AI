@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getStorage, ref, uploadString } from 'firebase/storage';
+import { getDownloadURL } from '@firebase/storage';
+import { db, auth, functions, storagedb } from '@/lib/firebase';
+
+const storage = getStorage();
 
 export async function POST(req: NextRequest, res: NextResponse) {
   try {
@@ -27,15 +32,25 @@ export async function POST(req: NextRequest, res: NextResponse) {
     }
 
     const data = await audioAndSentiment.json();
-    console.log(data);
-    // Encode base64 strings in the response object
-    const encodedResponse = Object.fromEntries(
-      Object.entries(data.response).map(([lang, base64]) => [lang, Buffer.from(base64 as string, 'base64').toString()])
-    );
+    const audioRefs: Record<string, string> = {};
 
-    console.log(encodedResponse);
+    for (const [lang, base64Audio] of Object.entries(data.response.audios)) {
+      const audioRef = ref(storagedb, `audios/${lang}.wav`);
+      const uploadSnapshot = await uploadString(audioRef, base64Audio as string, 'base64');
+      const downloadURL = await getDownloadURL(uploadSnapshot.ref);
+      audioRefs[lang as string] = downloadURL;
+    }
 
-    return NextResponse.json({ ...data, response: encodedResponse });
+    const responseWithRefs = {
+      response: {
+        audios: audioRefs,
+        transcriptions: data.response.transcriptions,
+      },
+      sentiment: data.sentiment,
+    };
+
+    console.log(responseWithRefs);
+    return NextResponse.json(responseWithRefs);
   } catch (error) {
     console.error('Error fetching data:', error);
     return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });

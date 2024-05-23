@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FormControl, FormField, FormItem, Form, FormMessage } from "./ui/form";
 import { Input } from "./ui/input";
 import { addDoc, getDocs, serverTimestamp } from "firebase/firestore";
-import { User, limitedMessagesRef, messageRef } from "@/lib/converters/Message";
+import { Message, User, limitedMessagesRef, messageRef, sortedMessagesRef } from "@/lib/converters/Message";
 import { Button } from "./ui/button";
 import { useSubscriptionStore } from "../../store/store";
 import { useToast } from "./ui/use-toast";
@@ -23,6 +23,9 @@ import {
   LanguageSuppportMap,
   useLanguageStore,
 } from "@/../store/store";
+import { useCollectionData } from "react-firebase-hooks/firestore";
+import { getAuthSession } from "@/lib/auth";
+import { ChatMembers, chatMemberCollectionGroupRef } from "@/lib/converters/ChatMembers";
 
 const formSchema = z.object({
   input: z.string().max(1000),
@@ -42,7 +45,22 @@ export interface InputBhashini {
   te: string,
 }
 
-const ChatInput = ({ chatId }: { chatId: string }) => {
+export interface liknessAndIntentBhashiniInput {
+  lm1: string;
+  sm1: {
+    ds1: string[];
+    fa1: string[];
+    io1: string[];
+    np1: string[];
+  };
+}
+
+interface ChatInputProps {
+  chatId: string,
+  initialMessages: Message[],
+}
+
+const ChatInput = ({ chatId, initialMessages }: ChatInputProps) => {
   const subscription = useSubscriptionStore((state) => state.subscription);
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -54,6 +72,10 @@ const ChatInput = ({ chatId }: { chatId: string }) => {
       input: "",
     },
   });
+
+  const [messages, loading, error] = useCollectionData<Message>(
+    sortedMessagesRef(chatId), {initialValue: initialMessages}
+  );
 
   const [currentRecord, setCurrentRecord] = useState<{
     file: string | null;
@@ -72,6 +94,40 @@ const ChatInput = ({ chatId }: { chatId: string }) => {
     console.log(values.input);
   
     try {
+
+      const inputBhashiniStrings: string[] = [];
+      messages?.forEach((message) => {
+        const { en } = message.inputBhashini;
+        const inputBhashiniString = `en: ${en}`;
+        inputBhashiniStrings.push(inputBhashiniString);
+      });
+      const concatenatedInputBhashini = inputBhashiniStrings.join('\n')
+      console.log(concatenatedInputBhashini)
+
+      const likeAndIntent = await fetch('/api/getLikenessAndIntent', {
+        method: 'POST',
+        body: JSON.stringify({ text: concatenatedInputBhashini }),
+      });
+
+      let liknessAndIntentBhashiniInput : liknessAndIntentBhashiniInput;
+      let LiknessAndIntentGenerated;
+      if (likeAndIntent.ok) {
+        const data = await likeAndIntent.json();
+        console.log(data);
+        liknessAndIntentBhashiniInput = {
+          lm1: data.response.likeness_meter,
+          sm1: {
+            ds1: data.response.summary["Deal Status"],
+            fa1: data.response.summary["Final Agreement"],
+            io1: data.response.summary["Initial Offer"],
+            np1: data.response.summary["Negotiation Process"]
+          }
+        };
+        LiknessAndIntentGenerated = JSON.stringify(liknessAndIntentBhashiniInput);
+      } else {
+        console.error('Failed to fetch translations:', likeAndIntent.status);
+      }
+
       const inpBhashini = await fetch('/api/getAllTextTranslations', {
         method: 'POST',
         body: JSON.stringify({ text: values.input, sourceLanguage: language }),
@@ -109,7 +165,7 @@ const ChatInput = ({ chatId }: { chatId: string }) => {
         };
   
         addDoc(messageRef(chatId), {
-          input: values.input,
+          input: LiknessAndIntentGenerated || "Your Negotiation is being Analysed",
           inputBhashini,
           timestamp: serverTimestamp(),
           user: userToStore,
