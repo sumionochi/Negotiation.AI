@@ -37,7 +37,8 @@ export interface InputBhashini {
 }
 
 export interface AudioBhashini {
-  bn: string,
+  audios:{
+    bn: string,
   en: string,
   gu: string,
   hi: string,
@@ -48,16 +49,28 @@ export interface AudioBhashini {
   pa: string,
   ta: string,
   te: string,
+  },
+  transcriptions:{
+    bn: string,
+  en: string,
+  gu: string,
+  hi: string,
+  kn: string,
+  ml: string,
+  mr: string,
+  or: string,
+  pa: string,
+  ta: string,
+  te: string,
+  }
 }
 
 export interface EmotionScore {
-  label: string,
-  score: number,
+  label: string;
+  score: number;
 }
 
-export interface EmotionBhashini {
-  [key: string]: EmotionScore[];
-}
+export interface EmotionBhashini extends Array<EmotionScore> {}
 
 export interface Message {
   id?: string;

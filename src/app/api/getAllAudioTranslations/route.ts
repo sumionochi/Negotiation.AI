@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStorage, ref, uploadString } from 'firebase/storage';
 import { getDownloadURL } from '@firebase/storage';
 import { db, auth, functions, storagedb } from '@/lib/firebase';
+import { timeStamp } from 'console';
 
 const storage = getStorage();
 
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest, res: NextResponse) {
 
     console.log('Received audio file:', base64Audio);
     console.log('Source language:', sourceLanguage);
+    console.log(body.messages);
 
     const audioAndSentiment = await fetch('https://bhashini-api.onrender.com/getAllVoiceTranslations', {
       method: 'POST',
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest, res: NextResponse) {
     const audioRefs: Record<string, string> = {};
 
     for (const [lang, base64Audio] of Object.entries(data.response.audios)) {
-      const audioRef = ref(storagedb, `audios/${lang}.wav`);
+      const audioRef = ref(storagedb, `audiosaudios/${body.chatId}/${lang}.wav`);
       const uploadSnapshot = await uploadString(audioRef, base64Audio as string, 'base64');
       const downloadURL = await getDownloadURL(uploadSnapshot.ref);
       audioRefs[lang as string] = downloadURL;

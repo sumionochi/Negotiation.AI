@@ -8,11 +8,11 @@ import {
 } from "@/components/ui/tooltip";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { ArrowBigRight, ArrowRight, Badge, Download, LucidePhoneOff, Mic, Phone, PhoneOff, Save, Trash } from "lucide-react";
+import { ArrowBigRight, ArrowLeft, ArrowRight, Badge, Delete, Download, LoaderIcon, LucidePhoneOff, Mic, Phone, PhoneOff, Save, Trash } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { addDoc, serverTimestamp } from "firebase/firestore";
-import { User, limitedMessagesRef, messageRef } from "@/lib/converters/Message";
+import { Message, User, limitedMessagesRef, messageRef, sortedMessagesRef } from "@/lib/converters/Message";
 import {
   LanguageSuppport,
   LanguageSuppportMap,
@@ -26,11 +26,13 @@ import useAdminId from "@/hooks/useAdminId";
 import UserAvatar from "./UserAvatar";
 import LoadingSpinner from "./LoadingSpinner";
 import LangSelect from "./LangSelect";
+import { liknessAndIntentBhashiniInput } from "./ChatInput";
 
 type Props = {
   className?: string;
   timerClassName?: string;
-  chatId: string
+  chatId: string;
+  initialMessages: Message[];
 };
 
 type Record = {
@@ -64,7 +66,7 @@ const blobToBase64 = (blob: Blob) => {
   });
 };
 // Utility function to send a blob
-async function submitRecord(blob: Blob, chatId: string, session: any, language: string) {
+async function submitRecord(blob: Blob, chatId: string, session: any, language: string, messages:any, setIsLoading: any) {
   const audio = blob;
   console.log(audio);
   if (!session?.user) {
@@ -72,25 +74,58 @@ async function submitRecord(blob: Blob, chatId: string, session: any, language: 
   }
 
   const inpBhashini = {
-    bn: "রেকর্ড করা অডিও",
-    en: "Recorded Audio",
-    gu: "રેકોર્ડ કરેલ ઓડિયો",
-    hi: "रिकॉर्ड किया हुआ ऑडियो",
-    kn: "ರೆಕಾರ್ಡ್ ಮಾಡಲಾದ ಧ್ವನಿ",
-    ml: "റേക്കോർഡ് ചെയ്ത ഓഡിയോ",
-    mr: "रेकॉर्ड केलेला ध्वनीमुद्रण",
-    or: "ରେକର୍ଡ୍ କରାଯାଇଥିବା ଅଡିଓ",
-    pa: "ਰਿਕਾਰਡ ਕੀਤੀ ਆਡੀਓ",
-    ta: "பதிவுசெய்யப்பட்ட ஆடியோ",
-    te: "రికార్డ్ చేసిన ఆడియో"
+    bn: "কল রেকর্ডিং",
+    en: "Call Recording",
+    gu: "કૉલ રેકોર્ડિંગ",
+    hi: "कॉल रिकॉर्डिंग",
+    kn: "ಕರೆ ದಾಖಲೆ",
+    ml: "കോൾ രേഖപ്പെടുത്തൽ",
+    mr: "कॉल रेकॉर्डिंग",
+    or: "କଲ୍ ରେକର୍ଡିଂ",
+    pa: "ਕਾਲ ਰਿਕਾਰਡਿੰਗ",
+    ta: "அழைப்பு பதிவு",
+    te: "కాల్ రికార్డింగ్"
   };
 
   try {
+    setIsLoading(true);
+    const inputBhashiniStrings: string[] = [];
+    messages?.forEach((message:any) => {
+      const inputBhashiniString = message.audioBhashini!.transcriptions['en'];
+      inputBhashiniStrings.push(inputBhashiniString);
+    });
+    const concatenatedInputBhashini = inputBhashiniStrings.join('\n')
+    console.log(concatenatedInputBhashini, "here problem")
+
+    const likeAndIntent = await fetch('/api/getLikenessAndIntent', {
+      method: 'POST',
+      body: JSON.stringify({ text: concatenatedInputBhashini }),
+    });
+
+    let liknessAndIntentBhashiniInput : liknessAndIntentBhashiniInput;
+    let LiknessAndIntentGenerated;
+    if (likeAndIntent.ok) {
+      const data = await likeAndIntent.json();
+      console.log(data, "H");
+      liknessAndIntentBhashiniInput = {
+        lm1: data.response.likeness_meter,
+        sm1: {
+          ds1: data.response.summary["Deal Status"],
+          fa1: data.response.summary["Final Agreement"],
+          io1: data.response.summary["Initial Offer"],
+          np1: data.response.summary["Negotiation Process"]
+        }
+      };
+      LiknessAndIntentGenerated = JSON.stringify(liknessAndIntentBhashiniInput);
+    } else {
+      console.error('Failed to fetch translations:', likeAndIntent.status);
+    }
+
     const base64Audio = await blobToBase64(audio);
     console.log(base64Audio);
     const audiBhashini = await fetch('/api/getAllAudioTranslations', {
       method: 'POST',
-      body: JSON.stringify({ audio_file: base64Audio, sourceLanguage: language })
+      body: JSON.stringify({ audio_file: base64Audio, sourceLanguage: language, chatId: chatId, messageId: messages })
     });
 
     if (audiBhashini.ok) {
@@ -103,12 +138,14 @@ async function submitRecord(blob: Blob, chatId: string, session: any, language: 
         image: session.user.image || ""
       };
       addDoc(messageRef(chatId), {
-        input: "Recorded Audio...",
+        input: LiknessAndIntentGenerated || "Your Negotiation is being Analysed",
         inputBhashini: inpBhashini,
         audioBhashini: data.response,
+        emotionBhashini: data.sentiment,
         timestamp: serverTimestamp(),
         user: userToStore
       });
+      setIsLoading(false);
     } else {
       console.error('Failed to fetch translations:', audiBhashini.status);
     }
@@ -120,13 +157,19 @@ async function submitRecord(blob: Blob, chatId: string, session: any, language: 
 export const AudioRecorderWithVisualizer = ({
   className,
   timerClassName,
-  chatId
+  chatId,
+  initialMessages
 }: Props) => {
   const { theme } = useTheme();
   const { data: session } = useSession();
   const sessionSave = session;
   const [language, setLanguage, getLanguage, getNotSupportedLanguage] = useLanguageStore((state)=>[state.language, state.setLanguage, state.getLanguage, state.getNotSupportedLanguages]);
   const [showOverlay, setShowOverlay] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [messages] = useCollectionData<Message>(
+    sortedMessagesRef(chatId), {initialValue: initialMessages}
+  );
 
   // States
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -225,7 +268,7 @@ export const AudioRecorderWithVisualizer = ({
       const recordBlob = new Blob(recordingChunks, {
         type: "audio/wav",
       });
-      submitRecord(recordBlob, chatId, session, language);
+      submitRecord(recordBlob, chatId, session, language, messages, setIsLoading);
       setCurrentRecord({
         ...currentRecord,
         file: window.URL.createObjectURL(recordBlob),
@@ -439,9 +482,14 @@ export const AudioRecorderWithVisualizer = ({
         <Tooltip>
           <TooltipTrigger className="flex justify-end items-center" asChild>
             {!isRecording ? (
-              <Button onClick={() => startRecording()} className="bg-gradient-to-tr text-white from-violet-500 to-orange-300 shadow-md shadow-black flex flex-row gap-2">
+              <>
+                <Button disabled={isLoading} onClick={() => setShowOverlay(false)} className="bg-gradient-to-tr text-white from-rose-700 to-pink-600 shadow-md shadow-black flex flex-row gap-2">
+                {isLoading ? <LoaderIcon className="w-5 h-5 animate-spin"/> : <><ArrowLeft className="w-5 h-5" /></>}
+                </Button>
+                <Button onClick={() => startRecording()} className="bg-gradient-to-tr text-white from-violet-500 to-orange-300 shadow-md shadow-black flex flex-row gap-2">
                 <Phone size={20} />
-              </Button>
+                </Button>
+              </>
             ) : (
               <Button onClick={handleSubmit} className=" text-white bg-gradient-to-r from-teal-400 to-gray-800 shadow-md shadow-black flex flex-row gap-2">
                 <ArrowRight size={20} />

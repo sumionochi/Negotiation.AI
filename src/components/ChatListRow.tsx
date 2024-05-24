@@ -34,17 +34,32 @@ function ChatListRow({chatId}:{chatId:string}){
       else return 'Welcome';
     }
 
+    const NewChat = () => {
+      if (language === 'en') return 'New Chat';
+      else if (language === 'hi') return 'नई बातचीत';
+      else if (language === 'bn') return 'নতুন চ্যাট';
+      else if (language === 'gu') return 'નવો ચેટ';
+      else if (language === 'or') return 'ନୂଆ ଚାଟ୍';
+      else if (language === 'ml') return 'പുതിയ ചാറ്റ്';
+      else if (language === 'mr') return 'नवीन गप्पा';
+      else if (language === 'pa') return 'ਨਵੀਂ ਗੱਲਬਾਤ';
+      else if (language === 'ta') return 'புதிய அரட்டை';
+      else if (language === 'te') return 'కొత్త చాట్';
+      else return 'New Chat';
+    }
+
+
     const row = (message?: Message) => {
       return(
         <div key={chatId} onClick={()=>router.push(`/chat/${chatId}`)} className="flex p-5 items-center space-x- cursor-pointer hover:bg-gray-100 border-2 shadow-md shadow-black dark:hover:bg-slate-700 rounded-lg">
           <UserAvatar name={message?.user.name || session?.user.name} image={message?.user.image || session?.user.image} className="m-2"/>
           <div className="flex-1">
             <p className="font-bold text-primary">
-              {!message && 'New Chat'}
+              {!message && NewChat()}
               {message && [message?.user.name || session?.user.name].toString().split(' ')[0]}
             </p>
             <p className="text-primary line-clamp-1">
-              {message?.translated?.[language] || Welcome()}
+              {message?.inputBhashini[language] || Welcome()}
             </p>
           </div>
           <div className="text-xs text-primary text-right">

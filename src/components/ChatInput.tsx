@@ -15,7 +15,7 @@ import { useToast } from "./ui/use-toast";
 
 import { useRouter } from "next/navigation";
 import { ToastAction } from "./ui/toast";
-import { ArrowRight, Mic, MicOff } from "lucide-react";
+import { ArrowRight, LoaderIcon, Mic, MicOff } from "lucide-react";
 import { AudioRecorderWithVisualizer } from "@/components/AudioMic";
 
 import {
@@ -72,6 +72,7 @@ const ChatInput = ({ chatId, initialMessages }: ChatInputProps) => {
       input: "",
     },
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   const [messages, loading, error] = useCollectionData<Message>(
     sortedMessagesRef(chatId), {initialValue: initialMessages}
@@ -82,6 +83,7 @@ const ChatInput = ({ chatId, initialMessages }: ChatInputProps) => {
   }>({ file: null });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true);
     if (values.input.length === 0) {
       return;
     }
@@ -94,7 +96,6 @@ const ChatInput = ({ chatId, initialMessages }: ChatInputProps) => {
     console.log(values.input);
   
     try {
-
       const inputBhashiniStrings: string[] = [];
       messages?.forEach((message) => {
         const { en } = message.inputBhashini;
@@ -170,11 +171,13 @@ const ChatInput = ({ chatId, initialMessages }: ChatInputProps) => {
           timestamp: serverTimestamp(),
           user: userToStore,
         });
+        setIsLoading(false);
       } else {
         console.error('Failed to fetch translations:', inpBhashini.status);
       }
     } catch (error) {
       console.error('Error fetching translations:', error);
+      setIsLoading(false);
     }
   }
 
@@ -184,6 +187,7 @@ const ChatInput = ({ chatId, initialMessages }: ChatInputProps) => {
         className="p-4 bg-secondary border-b-8"
         timerClassName="bottom-4"
         chatId = {chatId}
+        initialMessages={initialMessages}
       />
       <Form {...form}>
         <form
@@ -209,9 +213,9 @@ const ChatInput = ({ chatId, initialMessages }: ChatInputProps) => {
             type="submit"
             className="bg-gradient-to-tr text-white from-violet-500 to-orange-300 shadow-md shadow-black flex flex-row gap-2"
             text-white
+            disabled={isLoading}
           >
-            <p>Send</p>
-            <ArrowRight className="w-5 h-5" />
+            {isLoading ? <LoaderIcon className="w-5 h-5 animate-spin"/> : <><p>Send</p><ArrowRight className="w-5 h-5" /></>}
           </Button>
         </form>
       </Form>
