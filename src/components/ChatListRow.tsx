@@ -20,20 +20,34 @@ function ChatListRow({chatId}:{chatId:string}){
       return chatId.substring(0,n);
     }
 
-    const Welcome = ()=> {
-      if(language === 'en') return 'Welcome';
-      else if(language === 'hi') return 'Welcome';
-      else if(language === 'de') return 'Welcome';
-      else if(language === 'fr') return 'Welcome';
-      else if(language === 'ja') return 'Welcome';
-      else if(language === 'ur') return 'Welcome';
-      else if(language === 'ta') return 'Welcome';
-      else if(language === 'mr') return 'Welcome';
-      else if(language === 'ko') return 'Welcome';
-      else if(language === 'gu') return 'Welcome';
-      else if(language === 'bn') return 'Welcome';
+    const Welcome = () => {
+      if (language === 'en') return 'Welcome';
+      else if (language === 'hi') return 'स्वागत है';
+      else if (language === 'bn') return 'স্বাগতম';
+      else if (language === 'gu') return 'આવકાર';
+      else if (language === 'or') return 'ସ୍ୱାଗତ';
+      else if (language === 'ml') return 'സ്വാഗതം';
+      else if (language === 'mr') return 'स्वागत';
+      else if (language === 'pa') return 'ਸੁਆਗਤ';
+      else if (language === 'ta') return 'வரவேற்கிறோம்';
+      else if (language === 'te') return 'స్వాగతం';
       else return 'Welcome';
     }
+
+    const NewChat = () => {
+      if (language === 'en') return 'New Chat';
+      else if (language === 'hi') return 'नई बातचीत';
+      else if (language === 'bn') return 'নতুন চ্যাট';
+      else if (language === 'gu') return 'નવો ચેટ';
+      else if (language === 'or') return 'ନୂଆ ଚାଟ୍';
+      else if (language === 'ml') return 'പുതിയ ചാറ്റ്';
+      else if (language === 'mr') return 'नवीन गप्पा';
+      else if (language === 'pa') return 'ਨਵੀਂ ਗੱਲਬਾਤ';
+      else if (language === 'ta') return 'புதிய அரட்டை';
+      else if (language === 'te') return 'కొత్త చాట్';
+      else return 'New Chat';
+    }
+
 
     const row = (message?: Message) => {
       return(
@@ -41,11 +55,11 @@ function ChatListRow({chatId}:{chatId:string}){
           <UserAvatar name={message?.user.name || session?.user.name} image={message?.user.image || session?.user.image} className="m-2"/>
           <div className="flex-1">
             <p className="font-bold text-primary">
-              {!message && 'New Chat'}
+              {!message && NewChat()}
               {message && [message?.user.name || session?.user.name].toString().split(' ')[0]}
             </p>
             <p className="text-primary line-clamp-1">
-              {message?.translated?.[language] || Welcome()}
+              {message?.inputBhashini[language] || Welcome()}
             </p>
           </div>
           <div className="text-xs text-primary text-right">

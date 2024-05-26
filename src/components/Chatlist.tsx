@@ -3,6 +3,7 @@ import { chatMemberCollectionGroupRef } from '@/lib/converters/ChatMembers'
 import { doc, getDocs } from 'firebase/firestore'
 import React from 'react'
 import ChatListRows from './ChatListRows'
+import ChatInput from './ChatInput'
 
 type Props = {}
 
@@ -15,7 +16,9 @@ const Chatlist = async (props: Props) => {
     }))
 
     return (
-        <ChatListRows initialChats={initialChats}/>
+        <>
+            <ChatListRows initialChats={initialChats}/>
+        </>
     )
 }
 

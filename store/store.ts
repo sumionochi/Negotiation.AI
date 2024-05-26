@@ -8,21 +8,12 @@ export type LanguageSuppport =
   | "hi"
   | "bn"
   | "gu"
-  | "as"
-  | "bho"
-  | "doi"
-  | "kn"
-  | "mai"
   | "ml"
   | "mr"
-  | "ne"
   | "or"
   | "pa"
-  | "sa"
   | "ta"
-  | "te"
-  | "ur";
-
+  | "te";
 const Lang_free = 5;
 
 export const LanguageSuppportMap: Record<LanguageSuppport, string> = {
@@ -30,20 +21,12 @@ export const LanguageSuppportMap: Record<LanguageSuppport, string> = {
   hi: "Hindi",
   bn: "Bengali",
   gu: "Gujarati",
-  as: "Assamese",
-  bho: "Bhojpuri",
-  doi: "Dogri",
-  kn: "Kannada",
-  mai: "Maithili",
   ml: "Malayalam",
   mr: "Marathi",
-  ne: "Nepali",
   or: "Odia",
   pa: "Punjabi",
-  sa: "Sanskrit",
   ta: "Tamil",
   te: "Telugu",
-  ur: "Urdu",
 };
 
 interface LanguageState {

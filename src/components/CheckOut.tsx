@@ -50,7 +50,7 @@ function CheckOut(){
             <p className='pt-5 text-center text-xs text-indigo-600'>You are subscribed to Health Pro</p>
           </>
         )}
-        {isSubscribed ? (<ManageAcc/>) : isLoading || loading ? <Loader2 className='w-7 h-7 animate-spin'/> : <Button className='bg-transparent text-lg hover:bg-transparent' onClick={()=>createCheckOut()}>Sign Up</Button>}
+        {isSubscribed ? (<ManageAcc/>) : isLoading || loading ? <Loader2 className='w-7 h-7 animate-spin'/> : <Button className='bg-transparent text-lg hover:bg-transparent text-white' onClick={()=>createCheckOut()}>Sign Up</Button>}
     </div>
   )
 }

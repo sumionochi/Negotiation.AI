@@ -3,17 +3,36 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
+  TooltipProvider
 } from "@/components/ui/tooltip";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Download, Mic, Trash } from "lucide-react";
+import { ArrowBigRight, ArrowLeft, ArrowRight, Badge, Delete, Download, LoaderIcon, LucidePhoneOff, Mic, Phone, PhoneOff, Save, Trash } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { addDoc, serverTimestamp } from "firebase/firestore";
+import { Message, User, limitedMessagesRef, messageRef, sortedMessagesRef } from "@/lib/converters/Message";
+import {
+  LanguageSuppport,
+  LanguageSuppportMap,
+  useLanguageStore,
+} from "@/../store/store";
+import { getDocs, query, orderBy, limit } from "firebase/firestore";
+import MemberBadge from "./MemberBadge";
+import { ChatMembers, chatMembersRef } from "@/lib/converters/ChatMembers";
+import { useCollectionData } from "react-firebase-hooks/firestore";
+import useAdminId from "@/hooks/useAdminId";
+import UserAvatar from "./UserAvatar";
+import LoadingSpinner from "./LoadingSpinner";
+import LangSelect from "./LangSelect";
+import { liknessAndIntentBhashiniInput } from "./ChatInput";
 
 type Props = {
   className?: string;
   timerClassName?: string;
+  chatId: string;
+  initialMessages: Message[];
 };
 
 type Record = {
@@ -31,21 +50,127 @@ const padWithLeadingZeros = (num: number, length: number): string => {
   return String(num).padStart(length, "0");
 };
 
-// Utility function to download a blob
-const downloadBlob = (blob: Blob) => {
-  const downloadLink = document.createElement("a");
-  downloadLink.href = URL.createObjectURL(blob);
-  downloadLink.download = `Audio_${new Date().getMilliseconds()}.mp3`;
-  document.body.appendChild(downloadLink);
-  downloadLink.click();
-  document.body.removeChild(downloadLink);
+const blobToBase64 = (blob: Blob) => {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        const base64String = reader.result.split(',')[1];
+        resolve(base64String);
+      } else {
+        reject(new Error('Failed to convert Blob to Base64 string'));
+      }
+    };
+    reader.onerror = (error) => reject(error);
+  });
 };
+// Utility function to send a blob
+async function submitRecord(blob: Blob, chatId: string, session: any, language: string, messages:any, setIsLoading: any) {
+  const audio = blob;
+  console.log(audio);
+  if (!session?.user) {
+    return;
+  }
+
+  const inpBhashini = {
+    bn: "কল রেকর্ডিং",
+    en: "Call Recording",
+    gu: "કૉલ રેકોર્ડિંગ",
+    hi: "कॉल रिकॉर्डिंग",
+    kn: "ಕರೆ ದಾಖಲೆ",
+    ml: "കോൾ രേഖപ്പെടുത്തൽ",
+    mr: "कॉल रेकॉर्डिंग",
+    or: "କଲ୍ ରେକର୍ଡିଂ",
+    pa: "ਕਾਲ ਰਿਕਾਰਡਿੰਗ",
+    ta: "அழைப்பு பதிவு",
+    te: "కాల్ రికార్డింగ్"
+  };
+
+  try {
+    setIsLoading(true);
+    const inputBhashiniStrings: string[] = [];
+    messages?.forEach((message:any) => {
+      const inputBhashiniString = message.audioBhashini!.transcriptions['en'];
+      inputBhashiniStrings.push(inputBhashiniString);
+    });
+    const concatenatedInputBhashini = inputBhashiniStrings.join('\n')
+    console.log(concatenatedInputBhashini, "here problem")
+
+    const likeAndIntent = await fetch('/api/getLikenessAndIntent', {
+      method: 'POST',
+      body: JSON.stringify({ text: concatenatedInputBhashini }),
+    });
+
+    let liknessAndIntentBhashiniInput : liknessAndIntentBhashiniInput;
+    let LiknessAndIntentGenerated;
+    if (likeAndIntent.ok) {
+      const data = await likeAndIntent.json();
+      console.log(data, "H");
+      liknessAndIntentBhashiniInput = {
+        lm1: data.response.likeness_meter,
+        sm1: {
+          ds1: data.response.summary["Deal Status"],
+          fa1: data.response.summary["Final Agreement"],
+          io1: data.response.summary["Initial Offer"],
+          np1: data.response.summary["Negotiation Process"]
+        }
+      };
+      LiknessAndIntentGenerated = JSON.stringify(liknessAndIntentBhashiniInput);
+    } else {
+      console.error('Failed to fetch translations:', likeAndIntent.status);
+    }
+
+    const base64Audio = await blobToBase64(audio);
+    console.log(base64Audio);
+    const audiBhashini = await fetch('/api/getAllAudioTranslations', {
+      method: 'POST',
+      body: JSON.stringify({ audio_file: base64Audio, sourceLanguage: language, chatId: chatId, messageId: messages })
+    });
+
+    if (audiBhashini.ok) {
+      const data = await audiBhashini.json();
+
+      const userToStore: User = {
+        id: session.user.id!,
+        name: session.user.name!,
+        email: session.user.email!,
+        image: session.user.image || ""
+      };
+      addDoc(messageRef(chatId), {
+        input: LiknessAndIntentGenerated || "Your Negotiation is being Analysed",
+        inputBhashini: inpBhashini,
+        audioBhashini: data.response,
+        emotionBhashini: data.sentiment,
+        timestamp: serverTimestamp(),
+        user: userToStore
+      });
+      setIsLoading(false);
+    } else {
+      console.error('Failed to fetch translations:', audiBhashini.status);
+    }
+  } catch (error) {
+    console.error('Error fetching translations:', error);
+  }
+}
 
 export const AudioRecorderWithVisualizer = ({
   className,
   timerClassName,
+  chatId,
+  initialMessages
 }: Props) => {
   const { theme } = useTheme();
+  const { data: session } = useSession();
+  const sessionSave = session;
+  const [language, setLanguage, getLanguage, getNotSupportedLanguage] = useLanguageStore((state)=>[state.language, state.setLanguage, state.getLanguage, state.getNotSupportedLanguages]);
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [messages] = useCollectionData<Message>(
+    sortedMessagesRef(chatId), {initialValue: initialMessages}
+  );
+
   // States
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [isRecordingFinished, setIsRecordingFinished] =
@@ -91,6 +216,7 @@ export const AudioRecorderWithVisualizer = ({
 
   function startRecording() {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      setShowOverlay(true);
       navigator.mediaDevices
         .getUserMedia({
           audio: true,
@@ -133,30 +259,19 @@ export const AudioRecorderWithVisualizer = ({
         .catch((error) => {
           alert(error);
           console.log(error);
+          setShowOverlay(false);
         });
     }
   }
-  const convertBlobToBase64 = (blob:any) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = () => {
-        const base64data = reader.result;
-        resolve(base64data);
-      };
-      reader.onerror = (error) => reject(error);
-    });
-  };
   function stopRecording() {
-    recorder.onstop = async () => {
+    recorder.onstop = () => {
       const recordBlob = new Blob(recordingChunks, {
         type: "audio/wav",
       });
-      downloadBlob(recordBlob);
-      const base64Audio = await convertBlobToBase64(recordBlob);
+      submitRecord(recordBlob, chatId, session, language, messages, setIsLoading);
       setCurrentRecord({
         ...currentRecord,
-        file: base64Audio,
+        file: window.URL.createObjectURL(recordBlob),
       });
       recordingChunks = [];
     };
@@ -169,6 +284,7 @@ export const AudioRecorderWithVisualizer = ({
     clearTimeout(timerTimeout);
   }
   function resetRecording() {
+    setShowOverlay(false);
     const { mediaRecorder, stream, analyser, audioContext } =
       mediaRecorderRef.current;
 
@@ -210,7 +326,7 @@ export const AudioRecorderWithVisualizer = ({
   }
   const handleSubmit = () => {
     stopRecording();
-  };  
+  };
 
   // Effect to update the timer every second
   useEffect(() => {
@@ -239,7 +355,7 @@ export const AudioRecorderWithVisualizer = ({
       const barWidth = 1;
       const spacing = 1;
       const maxBarHeight = HEIGHT / 2.5;
-      const numBars = Math.floor((WIDTH + 200)/ (barWidth + spacing));
+      const numBars = Math.floor(WIDTH / (barWidth + spacing));
 
       for (let i = 0; i < numBars; i++) {
         const barHeight = Math.pow(dataArray[i] / 128.0, 8) * maxBarHeight;
@@ -287,27 +403,53 @@ export const AudioRecorderWithVisualizer = ({
     };
   }, [isRecording, theme]);
 
+  const [members, loading, error] = useCollectionData<ChatMembers>(
+    chatMembersRef(chatId)
+  )
+  const adminId = useAdminId({chatId});
+  if(loading && !members) return <LoadingSpinner/>
+
   return (
-    <div
-      className={cn(
-        "flex h-16 rounded-md relative w-full items-center justify-end gap-2",
-        {
-          "border-none p-1": isRecording,
-          "border-none p-0": !isRecording,
-        },
-        className
+    <>
+      {showOverlay && (
+        <div className="fixed flex flex-col justify-center items-center top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full bg-primary dark:bg-black opacity-100 z-2">
+          {
+            !loading && (
+              <div className="mt-24 sm:mt-0">
+                {members?.map((member)=>(
+                    <div className='p-5 border-2 bg-secondary/20 rounded-xl m-5'>
+                        <div className='flex items-center sm:space-x-2'>
+                          <UserAvatar name={member.email} image={member.image} />
+                      </div>
+                      <div className='max-sm:hidden'>
+                          <p className="text-white">{member.email}</p>
+                          {member.userId === adminId && (
+                              <p className='text-indigo-400 animate-pulse'>Admin</p>
+                          )}
+                      </div>
+                    </div>
+                ))}
+              </div>
+          )
+          }
+
+          {
+            <LangSelect/>
+          }
+          
+        </div>
       )}
-    >
+      <div className={cn("flex h-16 rounded-md relative w-full items-center justify-end gap-2",{"border p-1": isRecording,"border-none p-0": !isRecording,},className)}>
       {isRecording ? (
-        <Timer
-          hourLeft={hourLeft}
-          hourRight={hourRight}
-          minuteLeft={minuteLeft}
-          minuteRight={minuteRight}
-          secondLeft={secondLeft}
-          secondRight={secondRight}
-          timerClassName={timerClassName}
-        />
+          <Timer
+            hourLeft={hourLeft}
+            hourRight={hourRight}
+            minuteLeft={minuteLeft}
+            minuteRight={minuteRight}
+            secondLeft={secondLeft}
+            secondRight={secondRight}
+            timerClassName={timerClassName}
+          />
       ) : null}
       <canvas
         ref={canvasRef}
@@ -316,7 +458,6 @@ export const AudioRecorderWithVisualizer = ({
         }`}
       />
       <div className="flex gap-2">
-        {/* ========== Delete recording button ========== */}
         {isRecording ? (
           <TooltipProvider>
             <Tooltip>
@@ -324,14 +465,13 @@ export const AudioRecorderWithVisualizer = ({
               <Button
                 onClick={resetRecording}
                 size={"icon"}
-                variant={"destructive"}
-                className="bg-gradient-to-r from-rose-500 via-red-400 to-red-500 shadow-md shadow-black"
+                className=" text-white bg-gradient-to-r from-rose-700 to-pink-600 shadow-md shadow-black flex flex-row gap-2"
               >
-                <Trash size={20}  />
+                <PhoneOff size={20} />
               </Button>
             </TooltipTrigger>
             <TooltipContent className="m-2">
-              <span> Reset recording</span>
+              <span>End the call</span>
             </TooltipContent>
           </Tooltip>
           </TooltipProvider>
@@ -340,27 +480,33 @@ export const AudioRecorderWithVisualizer = ({
         {/* ========== Start and send recording button ========== */}
         <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
+          <TooltipTrigger className="flex justify-end items-center" asChild>
             {!isRecording ? (
-              <Button className="bg-gradient-to-bl text-white from-violet-500 to-orange-300 shadow-md shadow-black" onClick={() => startRecording()} size={"icon"}>
-                <Mic size={20} />
-              </Button>
+              <>
+                <Button disabled={isLoading} onClick={() => setShowOverlay(false)} className="bg-gradient-to-tr text-white from-rose-700 to-pink-600 shadow-md shadow-black flex flex-row gap-2">
+                {isLoading ? <LoaderIcon className="w-5 h-5 animate-spin"/> : <><ArrowLeft className="w-5 h-5" /></>}
+                </Button>
+                <Button onClick={() => startRecording()} className="bg-gradient-to-tr text-white from-violet-500 to-orange-300 shadow-md shadow-black flex flex-row gap-2">
+                <Phone size={20} />
+                </Button>
+              </>
             ) : (
-              <Button className="bg-gradient-to-r from-violet-300 to-violet-400 shadow-md shadow-black" onClick={handleSubmit} size={"icon"}>
-                <Download size={20} className="text-white"/>
+              <Button onClick={handleSubmit} className=" text-white bg-gradient-to-r from-teal-400 to-gray-800 shadow-md shadow-black flex flex-row gap-2">
+                <ArrowRight size={20} />
               </Button>
             )}
           </TooltipTrigger>
           <TooltipContent className="m-2">
             <span>
               {" "}
-              {!isRecording ? "Start recording" : "Download recording"}{" "}
+              {!isRecording ? "Start the call" : "Send recording"}{" "}
             </span>
           </TooltipContent>
         </Tooltip>
         </TooltipProvider>
       </div>
     </div>
+    </>
   );
 };
 
@@ -385,7 +531,7 @@ const Timer = React.memo(
     return (
       <div
         className={cn(
-          "items-center bg-white dark:bg-black top-4 left-2 absolute justify-center gap-2 border p-1.5 rounded-md font-mono font-medium text-foreground flex",
+          "items-center h-16 p-5 bg-secondary top-0 left-0 absolute justify-center gap-0.5 border rounded-md font-mono font-medium text-foreground flex",
           timerClassName
         )}
       >
