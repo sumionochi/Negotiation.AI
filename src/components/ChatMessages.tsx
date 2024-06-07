@@ -66,7 +66,7 @@ const ChatMessages = ({chatId, initialMessages, session}: Props) => {
                 if(message.input == "Your Negotiation is being Analysed"){
                     parseInput = message.input;
                 } else {
-                    parseInput = JSON.parse(message.input);
+                    parseInput = JSON.parse(message.translated![language] || message.input);
                 }
 
                 return (
