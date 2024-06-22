@@ -4,7 +4,7 @@
 
 **Negotiation.AI** is an innovative platform designed to enhance negotiation processes using artificial intelligence. Our platform provides a comprehensive suite of tools to support multilingual call recordings, AI-driven negotiation analysis, and seamless integration with existing systems to optimize decision-making and operational efficiency.
 
-![NegotiationAI_page_1](https://github.com/sumionochi/Negotiation.AI/assets/89721628/7f8f1dc4-9706-4f01-ba72-b78bf6102ec8)
+![Screenshot 2024-06-22 183619](https://github.com/sumionochi/Negotiation.AI/assets/89721628/9c3f318b-a1ec-43cf-a71b-fcd9de7d6875)
 
 ## Features
 
